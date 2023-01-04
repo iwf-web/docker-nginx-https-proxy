@@ -1,0 +1,20 @@
+name: nginx-https-proxy-test
+services:
+  http:
+    image: nginx
+    init: true
+    ports:
+      - '8080:80'
+  https:
+    build:
+      context: ../src/
+    init: true
+    links:
+      - http
+    environment:
+      WAIT_FOR: http:80
+      UPSTREAM_SERVER: http:80
+    volumes:
+      - ./certificates:/data/conf/nginx/certificates
+    ports:
+      - '8443:443'
