@@ -1,0 +1,37 @@
+name: Update Docker Hub Description
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dockerhub-description.yml
+      - README.md
+  workflow_dispatch:
+
+env:
+  # Must be in the format <namespace>/<name>
+  IMAGE_NAME: iwfwebsolutions/nginx-https-proxy
+
+jobs:
+  dockerHubDescription:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Prepare
+        id: prep
+        run: |
+          echo "::set-output name=repository::$(echo "${{ env.IMAGE_NAME }}" | tr '[A-Z]' '[a-z]')"
+
+      - name: Update repo description
+        if: ${{ !env.ACT }}
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ steps.prep.outputs.repository }}
+          # Input exceeding 100 characters will be truncated.
+          short-description: ${{ github.event.repository.description }}
+          # readme-filepath: ./README-DOCKERHUB.md

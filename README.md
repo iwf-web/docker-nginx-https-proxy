@@ -12,7 +12,7 @@ Docker Nginx Image for HTTPS Proxy
 #### Quick Guide on macOS
 
 ```shell
-brew install docker
+brew install docker docker-compose
 # or for Docker Desktop
 brew install --cask docker
 ```
@@ -61,7 +61,9 @@ The service should now be accessible over [https://localhost:8443](https://local
 
 ## Contributing
 
-Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for details on our code of conduct, and [CONTRIBUTING.md](CONTRIBUTING.md) for the process for submitting pull requests to us.
+Please read [README_DEV.md](README_DEV.md) for details on how to set up a development environment and potentially manually create a release.
+
+Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for details on our code of conduct, and [CONTRIBUTING.md](CONTRIBUTING.md) for the process of submitting pull requests to us.
 
 ## Versioning
 

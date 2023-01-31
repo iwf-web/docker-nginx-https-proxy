@@ -1,0 +1,111 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "*.*.*"
+    paths:
+      - .github/workflows/ci-cd.yml
+      - "src/**"
+      - "test/**"
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Must be in the format <namespace>/<name>
+  IMAGE_NAME: iwfwebsolutions/nginx-https-proxy
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip ci]')"
+    permissions:
+      contents: read
+      packages: write
+      # This is used to complete the identity challenge
+      # with sigstore/fulcio when running outside of PRs.
+      id-token: write
+    steps:
+      # https://github.com/actions/starter-workflows/blob/main/ci/docker-publish.yml
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v2
+        with:
+          cosign-release: 'v1.13.1'
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker meta (Docker Hub)
+        id: meta-pre
+        run: |
+          echo "::set-output name=digestNginx::$(docker manifest inspect nginx -v | jq -r '[.[]|select(.Descriptor.platform.architecture=="amd64")][0].Descriptor.digest')"
+          echo "::set-output name=digest::$(docker manifest inspect iwfwebsolutions/nginx:1.22-latest -v | jq -r '.Descriptor.digest')"
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        # Note: "docker/metadata-action" requires GitHub PAT
+        with:
+          images: |
+            docker.io/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+          # https://github.com/opencontainers/image-spec/blob/master/annotations.md
+          labels: |
+            org.opencontainers.image.authors=IWF Web Solutions Developer <developer@iwf.ch>
+            org.opencontainers.image.documentation=${{ github.event.repository.html_url }}
+            org.opencontainers.image.vendor=IWF Web Solutions
+            org.opencontainers.image.ref.name=iwfwebsolutions/nginx
+            org.opencontainers.image.title=Docker Nginx Image for HTTPS Proxy
+            org.opencontainers.image.description=Docker Nginx Image for HTTPS Proxy
+            org.opencontainers.image.base.name=docker.io/iwfwebsolutions/nginx:1.22-latest
+            org.opencontainers.image.base.digest=${{ steps.meta-pre.outputs.digest }}
+
+      - name: Build and push
+        id: build-and-push
+        uses: docker/bake-action@v2
+        with:
+          workdir: ./src
+          files: |
+            ./docker-bake.hcl
+            ${{ steps.meta.outputs.bake-file }}
+          targets: build-ci
+          set: |
+            base.cache-from=type=gha
+            base.cache-to=type=gha,mode=max
+          push: ${{ github.event_name != 'pull_request' && !env.ACT }}
+
+      - name: Docker meta (Docker Hub)
+        id: meta-post
+        run: |
+          echo "::set-output name=digest::$(docker manifest inspect ${{ env.IMAGE_NAME }} -v | jq -r '[.[]|select(.Descriptor.platform.architecture=="amd64")][0].Descriptor.digest')"
+
+      - name: Sign the published Docker image
+        if: ${{ github.event_name != 'pull_request' && !env.ACT }}
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        # This step uses the identity token to provision an ephemeral certificate
+        # against the sigstore community Fulcio instance.
+        run: echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign {}@${{ steps.meta-post.outputs.digest }}
+

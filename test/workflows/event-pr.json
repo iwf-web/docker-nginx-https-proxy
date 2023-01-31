@@ -1,0 +1,10 @@
+{
+    "pull_request": {
+        "head": {
+            "ref": "other-user/docker-nginx-https-proxy"
+        },
+        "base": {
+            "ref": "iwfwebsolutions/docker-nginx-https-proxy"
+        }
+    }
+}

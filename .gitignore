@@ -94,5 +94,6 @@ $RECYCLE.BIN/
 
 # End
 
-build/cache/
+.buildx-cache/
 test/certificates/
+.secrets
