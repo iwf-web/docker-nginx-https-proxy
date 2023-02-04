@@ -14,8 +14,48 @@ scriptsCommonUtilities="$SCRIPT_DIR/../lib/bertrand-benoit/scripts-common/utilit
 # shellcheck disable=1090
 . "$scriptsCommonUtilities"
 
+[[ -t 1 ]] && SH_PIPED=true || SH_PIPED=false # detect if output is piped
+if [[ $SH_PIPED == true ]]; then
+  TEXT_RESET=$(tput sgr0)
+  TEXT_ERROR=$(tput setaf 160)
+  TEXT_INFO=$(tput setaf 2)
+  TEXT_WARN=$(tput setaf 214)
+  TEXT_BOLD=$(tput bold)
+  TEXT_ITALIC=$(tput sitm || true) # not supported on MacOS
+  TEXT_UNDERLINE=$(tput smul)
+else
+  TEXT_RESET=""
+  TEXT_ERROR=""
+  TEXT_INFO=""
+  TEXT_WARN=""
+  TEXT_BOLD=""
+  TEXT_ITALIC=""
+  TEXT_UNDERLINE=""
+fi
+
+[[ $(echo -e '\xe2\x82\xac') == '€' ]] && SH_UNICODE=true || SH_UNICODE=false # detect if unicode is supported
+if [[ $SH_UNICODE == true ]]; then
+  ICON_SUCCESS="✅"
+  ICON_FAIL="⛔"
+  ICON_ALERT="✴️"
+  ICON_WAIT="⏳"
+  ICON_INFO="🌼"
+  ICON_CONFIG="🌱"
+  ICON_CLEAN="🧽"
+  ICON_REQUIRE="🔌"
+else
+  ICON_SUCCESS="OK "
+  ICON_FAIL="!! "
+  ICON_ALERT="?? "
+  ICON_WAIT="..."
+  ICON_INFO="(i)"
+  ICON_CONFIG="[c]"
+  ICON_CLEAN="[c]"
+  ICON_REQUIRE="[r]"
+fi
+
 # Check required tools
-checkBin docker || errorMessage "This tool requires Docker. Install it please, and then run this tool again."
+checkBin docker || errorMessage "${ICON_REQUIRE}${TEXT_ERROR} This tool requires Docker. Install it please, and then run this tool again.${TEXT_RESET}"
 
 usage() {
   echo "CI/CD script for Jenkins to build and upload docker image.
@@ -34,10 +74,15 @@ Options:
   -n --builder <x>         Docker builder to use [default: builder-default]."
 }
 
-# Overwrite this when running on MacOS with e.g. "FLAGS_GETOPT_CMD="$(brew --prefix gnu-getopt)/bin/getopt"
-FLAGS_GETOPT_CMD="${FLAGS_GETOPT_CMD:-getopt}"
+FLAGS_GETOPT_CMD="getopt"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  # Overwrite this when running on MacOS
+  checkPath "$(brew --prefix gnu-getopt)/bin/getopt" && FLAGS_GETOPT_CMD="$(brew --prefix gnu-getopt)/bin/getopt"
+fi
+set +e
 OPTS=$( $FLAGS_GETOPT_CMD --options hvb:pn: --longoptions help,verbose,branch:,push,pushregistry,builder: --name "$0" -- "$@" )
-if (( $? != 0 )); then echo "Incorrect options provided...exiting." >&2; exit 1; fi
+if (( $? != 0 )); then errorMessage "${ICON_FAIL}${TEXT_ERROR} Incorrect options provided ... exiting.${TEXT_RESET}"; fi
+set -e
 eval set -- "$OPTS"
 
 PUSH=false
@@ -67,30 +112,30 @@ while true; do
     -- ) shift; break ;;
     # If invalid options were passed, then getopt should have reported an error,
     # which we checked as VALID_ARGUMENTS when getopt was called...
-    *) echo "Unexpected option: $1 - this should not happen."; usage; exit 2 ;;
+    * ) writeMessage "${ICON_FAIL}${TEXT_ERROR} Unexpected option: $1 - this should not happen.${TEXT_RESET}"; usage; exit 2 ;;
   esac
   shift
 done
 
-info "Script directory:   \"${SCRIPT_DIR}\""
-info "Project directory:  \"${PROJECT_DIR}\""
-info "Code base:          \"${CODE_BASE}\""
+info "${ICON_INFO} Script directory:   \"${SCRIPT_DIR}\""
+info "${ICON_INFO} Project directory:  \"${PROJECT_DIR}\""
+info "${ICON_INFO} Code base:          \"${CODE_BASE}\""
 
-info "Git branch:         \"${GIT_BRANCH:-}\""
-info "Git repository:     \"${GIT_REPO}\""
+info "${ICON_INFO} Git branch:         \"${GIT_BRANCH:-}\""
+info "${ICON_INFO} Git repository:     \"${GIT_REPO}\""
 
-info "Docker builder:     \"${BUILDER}\""
-info "Push to Docker Hub: \"${PUSH}\""
+info "${ICON_INFO} Docker builder:     \"${BUILDER}\""
+info "${ICON_INFO} Push to Docker Hub: \"${PUSH}\""
 
 # Git branch is mandatory
-if [[ -z ${GIT_BRANCH} ]]; then
+if [[ -z ${GIT_BRANCH:-} ]]; then
   usage
   exit 1
 fi
 
 # Check if Docker Daemon is running
 if ! curl -s --unix-socket /var/run/docker.sock http/_ping 2>&1 >/dev/null; then
-  errorMessage "Docker is not running, please start it first"
+  errorMessage "${ICON_FAIL}${TEXT_ERROR} Docker is not running, please start it first.${TEXT_RESET}"
 fi
 
 # Retrieve code from git
@@ -155,9 +200,9 @@ TAG2="${BUILD_NUMBER}" \
 docker buildx bake build $( [[ "$PUSH" == true ]] && printf %s '--push' )
 
 if (( $? == 0 )); then
-  writeMessage "Done"
+  writeMessage "${ICON_SUCCESS}${TEXT_INFO} Done${TEXT_RESET}"
 else
-  errorMessage "Build failed"
+  errorMessage "${ICON_FAIL}${TEXT_ERROR} Build failed${TEXT_RESET}"
 fi
 
 if [[ -d ${CODE_BASE} ]]; then rm -rf ${CODE_BASE}; fi

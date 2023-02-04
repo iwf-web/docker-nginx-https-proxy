@@ -16,7 +16,7 @@ brew install docker docker-compose
 # or for Docker Desktop
 brew install --cask docker
 
-brew install act jq
+brew install act jq gnu-getopt
 ```
 
 #### Configure environment
@@ -57,6 +57,12 @@ docker compose up -d
 Following will simulate pushing to the branch
 
 Note: At the project root `./`
+
+#### Test Jenkins script
+
+```shell
+./.jenkins/ci-cd.sh --branch main --verbose
+```
 
 #### Test regular push (Tags: latest, sha-3909bd48)
 
